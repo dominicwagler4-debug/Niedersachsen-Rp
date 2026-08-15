@@ -49,7 +49,6 @@ class TicketView(discord.ui.View):
       self, interaction: discord.Interaction, button: discord.ui.Button
   ):
     guild = interaction.guild
-    # Überprüfen, ob es bereits ein Ticket für den User gibt
     existing_channel = discord.utils.get(
         guild.text_channels, name=f"ticket-{interaction.user.name.lower()}"
     )
@@ -60,7 +59,6 @@ class TicketView(discord.ui.View):
       )
       return
 
-    # Berechtigungen für den Ticket-Channel
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         interaction.user: discord.PermissionOverwrite(
@@ -79,7 +77,6 @@ class TicketView(discord.ui.View):
         f"Dein Ticket wurde erstellt: {ticket_channel.mention}", ephemeral=True
     )
 
-    # Nachricht im Ticket-Channel senden mit Schließen-Button
     close_view = TicketCloseView()
     await ticket_channel.send(
         f"Hallo {interaction.user.mention}! Ein Teammitglied wird sich gleich"
@@ -130,10 +127,7 @@ async def ticketpanel(interaction: discord.Interaction):
 # 2. SHIFT SYSTEM (/shift start & /shift end)
 # -------------------------------------------------------------------------
 
-
-@bot.tree.group(name="shift", description="Verwalte deine Shifts")
-async def shift(interaction: discord.Interaction):
-  pass
+shift = app_commands.Group(name="shift", description="Verwalte deine Shifts")
 
 
 @shift.command(name="start", description="Startet deine Shift")
@@ -180,6 +174,8 @@ async def shift_end(interaction: discord.Interaction):
   )
   await interaction.response.send_message(embed=embed)
 
+
+bot.tree.add_command(shift)
 
 # -------------------------------------------------------------------------
 # 3. UPRANK & DOWNRANK SYSTEM
