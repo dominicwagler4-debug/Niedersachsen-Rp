@@ -13,12 +13,11 @@ ROBLOX_API_KEY = "Z+aS/hlW8kmSJ6buCWtF9buf+xaQw22fGzWKPYavJ+ZBkHQwZXlKaGJHY2lPaU
 UNIVERSE_ID = "9772844823"
 SECRET_KEY = "Gamemode"
 
-# TRAGE HIER DEINE DISCORD SERVER (GUILD) ID EIN, damit der Befehl sofort da ist!
-GUILD_ID = discord.Object(id=1531204649116499999) 
+# Deine Discord Server (Guild) ID
+GUILD_ID = discord.Object(id=153120464911649999) 
 
 @client.event
 async def on_ready():
-    # Befehle direkt auf deinem Server synchronisieren (sofortige Verfügbarkeit)
     tree.copy_global_to(guild=GUILD_ID)
     await tree.sync(guild=GUILD_ID)
     print(f"Eingeloggt als {client.user} und Befehle für den Server synchronisiert!")
@@ -40,7 +39,7 @@ async def ban(interaction: discord.Interaction, user_id: str, grund: str):
     }
     
     try:
-        response = requests.post(url, json.dumps(payload), headers=headers)
+        response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
             await interaction.followup.send(f"✅ Spieler {user_id} wurde erfolgreich gebannt. Grund: {grund}")
         else:
