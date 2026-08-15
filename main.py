@@ -16,17 +16,22 @@ class MyBot(commands.Bot):
     super().__init__(command_prefix="!", intents=intents)
 
   async def setup_hook(self):
+    # Wichtig: Registriert die Views permanent, damit Buttons nach Render-Neustarts nicht kaputtgehen
+    self.add_view(TicketView())
+    self.add_view(TicketCloseView())
+
+    # Synchronisiert die Slash Commands mit Discord
     await self.tree.sync()
     print(f"Eingeloggt als {self.user} und Slash Commands synchronisiert.")
 
 
 bot = MyBot()
 
-# Speicher für aktive Shifts
+# Speicher für aktive Shifts (User-ID -> Startzeit)
 active_shifts = {}
 
 # -------------------------------------------------------------------------
-# 1. TICKET SYSTEM
+# 1. TICKET SYSTEM (View mit Buttons)
 # -------------------------------------------------------------------------
 
 
@@ -44,6 +49,7 @@ class TicketView(discord.ui.View):
       self, interaction: discord.Interaction, button: discord.ui.Button
   ):
     guild = interaction.guild
+    # Überprüfen, ob es bereits ein Ticket für den User gibt
     existing_channel = discord.utils.get(
         guild.text_channels, name=f"ticket-{interaction.user.name.lower()}"
     )
@@ -54,6 +60,7 @@ class TicketView(discord.ui.View):
       )
       return
 
+    # Berechtigungen für den Ticket-Channel
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         interaction.user: discord.PermissionOverwrite(
@@ -72,10 +79,11 @@ class TicketView(discord.ui.View):
         f"Dein Ticket wurde erstellt: {ticket_channel.mention}", ephemeral=True
     )
 
+    # Nachricht im Ticket-Channel senden mit Schließen-Button
     close_view = TicketCloseView()
     await ticket_channel.send(
-        f"Hallo {interaction.user.mention}! Ein Teammitglied kümmert sich"
-        " gleich darum.\nKlicke auf den Button, um das Ticket zu schließen.",
+        f"Hallo {interaction.user.mention}! Ein Teammitglied wird sich gleich"
+        " kümmern.\nKlicke auf den Button, um das Ticket zu schließen.",
         view=close_view,
     )
 
@@ -93,9 +101,7 @@ class TicketCloseView(discord.ui.View):
   async def close_ticket(
       self, interaction: discord.Interaction, button: discord.ui.Button
   ):
-    await interaction.response.send_message(
-        "Ticket wird in 5 Sekunden gelöscht..."
-    )
+    await interaction.response.send_message("Ticket wird in 5 Sekunden gelöscht...")
     await discord.utils.sleep_until(
         discord.utils.utcnow() + discord.timedelta(seconds=5)
     )
@@ -221,7 +227,7 @@ async def downrank(
 
 
 # -------------------------------------------------------------------------
-# 4. ANKÜNDIGUNGS SYSTEM
+# 4. ANKÜNDIGUNGS SYSTEM (Announcement)
 # -------------------------------------------------------------------------
 
 
@@ -263,12 +269,12 @@ async def ban(
   embed = discord.Embed(
       title="🔨 Benutzer gebannt",
       description=f"{member.mention} wurde gebannt.\n**Grund:** {grund}",
-      color=discord.Color.dark_embed(),
+      color=discord.Color.dark_grey(),
   )
   await interaction.response.send_message(embed=embed)
 
 
-# Bot starten
+# Bot starten (Nutzt die Render Umgebungsvariable DISCORD_TOKEN)
 token = os.getenv("DISCORD_TOKEN")
 if not token:
   print("Fehler: Kein DISCORD_TOKEN in den Umgebungsvariablen gefunden!")
