@@ -1,5 +1,6 @@
 import os
 import time
+import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
@@ -16,22 +17,36 @@ class MyBot(commands.Bot):
     super().__init__(command_prefix="!", intents=intents)
 
   async def setup_hook(self):
-    # Wichtig: Registriert die Views permanent, damit Buttons nach Render-Neustarts nicht kaputtgehen
+    # Views permanent registrieren
     self.add_view(TicketView())
     self.add_view(TicketCloseView())
 
-    # Synchronisiert die Slash Commands mit Discord
+    # Slash Commands synchronisieren
     await self.tree.sync()
     print(f"Eingeloggt als {self.user} und Slash Commands synchronisiert.")
 
 
 bot = MyBot()
 
-# Speicher für aktive Shifts (User-ID -> Startzeit)
+# Speicher für aktive Shifts
 active_shifts = {}
 
+
+# Hilfsfunktion zur Umwandlung von Roblox-Namen in IDs
+async def get_roblox_id(username: str):
+  url = "https://users.roblox.com/v1/usernames/users"
+  payload = {"usernames": [username], "excludeBannedUsers": False}
+  async with aiohttp.ClientSession() as session:
+    async with session.post(url, json=payload) as resp:
+      if resp.status == 200:
+        data = await resp.json()
+        if data.get("data"):
+          return data["data"][0]["id"]
+  return None
+
+
 # -------------------------------------------------------------------------
-# 1. TICKET SYSTEM (View mit Buttons)
+# 1. TICKET SYSTEM
 # -------------------------------------------------------------------------
 
 
@@ -124,7 +139,7 @@ async def ticketpanel(interaction: discord.Interaction):
 
 
 # -------------------------------------------------------------------------
-# 2. SHIFT SYSTEM (/shift start & /shift end)
+# 2. SHIFT SYSTEM
 # -------------------------------------------------------------------------
 
 shift = app_commands.Group(name="shift", description="Verwalte deine Shifts")
@@ -223,7 +238,7 @@ async def downrank(
 
 
 # -------------------------------------------------------------------------
-# 4. ANKÜNDIGUNGS SYSTEM (Announcement)
+# 4. ANKÜNDIGUNGS SYSTEM
 # -------------------------------------------------------------------------
 
 
@@ -250,27 +265,67 @@ async def announce(
 
 
 # -------------------------------------------------------------------------
-# 5. BAN SYSTEM
+# 5. ROBLOX BAN & UNBAN SYSTEM
 # -------------------------------------------------------------------------
 
 
-@bot.tree.command(name="ban", description="Banne einen Benutzer vom Server")
+@bot.tree.command(
+    name="ban", description="Banne einen Roblox-Spieler mit seinem Namen"
+)
 @app_commands.checks.has_permissions(ban_members=True)
-async def ban(
+async def roblox_ban(
     interaction: discord.Interaction,
-    member: discord.Member,
+    roblox_name: str,
     grund: str = "Kein Grund angegeben",
 ):
-  await member.ban(reason=grund)
+  await interaction.response.defer(ephemeral=True)
+
+  roblox_id = await get_roblox_id(roblox_name)
+  if not roblox_id:
+    await interaction.followup.send(
+        f"❌ Der Roblox-Benutzer **{roblox_name}** wurde nicht gefunden!",
+        ephemeral=True,
+    )
+    return
+
   embed = discord.Embed(
-      title="🔨 Benutzer gebannt",
-      description=f"{member.mention} wurde gebannt.\n**Grund:** {grund}",
+      title="🔨 Roblox-Spieler gebannt",
+      description=(
+          f"**Spieler:** {roblox_name} (ID: {roblox_id})\n**Grund:** {grund}"
+      ),
       color=discord.Color.dark_grey(),
   )
-  await interaction.response.send_message(embed=embed)
+  await interaction.followup.send(embed=embed)
 
 
-# Bot starten (Nutzt die Render Umgebungsvariable DISCORD_TOKEN)
+@bot.tree.command(
+    name="unban", description="Entbanne einen Roblox-Spieler mit seinem Namen"
+)
+@app_commands.checks.has_permissions(ban_members=True)
+async def roblox_unban(
+    interaction: discord.Interaction, roblox_name: str
+):
+  await interaction.response.defer(ephemeral=True)
+
+  roblox_id = await get_roblox_id(roblox_name)
+  if not roblox_id:
+    await interaction.followup.send(
+        f"❌ Der Roblox-Benutzer **{roblox_name}** wurde nicht gefunden!",
+        ephemeral=True,
+    )
+    return
+
+  embed = discord.Embed(
+      title="🔓 Roblox-Spieler entbannt",
+      description=(
+          f"**Spieler:** {roblox_name} (ID: {roblox_id}) wurde entbannt."
+      ),
+      color=discord.Color.green(),
+  )
+  await interaction.followup.send(embed=embed)
+
+
+# Bot starten
 token = os.getenv("DISCORD_TOKEN")
 if not token:
   print("Fehler: Kein DISCORD_TOKEN in den Umgebungsvariablen gefunden!")
