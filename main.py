@@ -18,9 +18,12 @@ async def on_ready():
     await bot.sync()
     print(f"Eingeloggt als {client.user} und Befehle synchronisiert!")
 
-# 3. Der Ban-Befehl
+# 3. Der Ban-Befehl (mit Defer gegen den Discord-Timeout)
 @bot.command(name="ban", description="Banne einen Spieler im Spiel")
 async def ban(interaction: discord.Interaction, user_id: str, grund: str):
+    # Sagt Discord sofort, dass der Bot die Anfrage verarbeitet (verhindert den Fehler)
+    await interaction.response.defer()
+    
     url = f"https://apis.roblox.com/messaging-service/v1/universes/{UNIVERSE_ID}/topics/BanRequest"
     
     payload = {
@@ -35,16 +38,16 @@ async def ban(interaction: discord.Interaction, user_id: str, grund: str):
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
-            await interaction.response.send_message(f"✅ Spieler {user_id} wurde erfolgreich gebannt. Grund: {grund}")
+            await interaction.followup.send(f"✅ Spieler {user_id} wurde erfolgreich gebannt. Grund: {grund}")
         else:
-            await interaction.response.send_message(f"❌ Fehler: {response.text}")
+            await interaction.followup.send(f"❌ Fehler: {response.text}")
     except Exception as e:
-        await interaction.response.send_message(f"❌ Ein technischer Fehler ist aufgetreten: {e}")
+        await interaction.followup.send(f"❌ Ein technischer Fehler ist aufgetreten: {e}")
 
-# 4. Token sicher aus den Render-Umgebungsvariablen laden und starten
+# 4. Token sicher laden und Bot starten
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if TOKEN is None:
-    print("❌ FEHLER: DISCORD_TOKEN wurde nicht gefunden! Bitte in Render unter 'Environment' als Key eintragen.")
+    print("❌ FEHLER: DISCORD_TOKEN wurde nicht gefunden! Bitte in Render unter 'Environment' eintragen.")
 else:
     client.run(TOKEN)
