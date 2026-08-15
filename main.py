@@ -4,6 +4,7 @@ import aiohttp
 import discord
 from discord import app_commands
 from discord.ext import commands
+from aiohttp import web
 
 # Intents einrichten
 intents = discord.Intents.default()
@@ -17,19 +18,17 @@ class MyBot(commands.Bot):
     super().__init__(command_prefix="!", intents=intents)
 
   async def setup_hook(self):
-    # Views permanent registrieren
     self.add_view(TicketView())
     self.add_view(TicketCloseView())
-
-    # Slash Commands synchronisieren
     await self.tree.sync()
     print(f"Eingeloggt als {self.user} und Slash Commands synchronisiert.")
 
 
 bot = MyBot()
 
-# Speicher für aktive Shifts
+# Speicher für aktive Shifts und gebannte Roblox-IDs
 active_shifts = {}
+banned_roblox_ids = set()
 
 
 # Hilfsfunktion zur Umwandlung von Roblox-Namen in IDs
@@ -87,7 +86,6 @@ class TicketView(discord.ui.View):
     ticket_channel = await guild.create_text_channel(
         f"ticket-{interaction.user.name}", overwrites=overwrites
     )
-
     await interaction.response.send_message(
         f"Dein Ticket wurde erstellt: {ticket_channel.mention}", ephemeral=True
     )
@@ -174,7 +172,6 @@ async def shift_end(interaction: discord.Interaction):
 
   start_time = active_shifts.pop(user_id)
   elapsed_seconds = int(time.time() - start_time)
-
   hours = elapsed_seconds // 3600
   minutes = (elapsed_seconds % 3600) // 60
   seconds = elapsed_seconds % 60
@@ -256,7 +253,6 @@ async def announce(
       title="📢 Ankündigung", description=text, color=discord.Color.blue()
   )
   embed.set_footer(text=f"Ankündigung von {interaction.user.name}")
-
   await target_channel.send(embed=embed)
   await interaction.response.send_message(
       f"Ankündigung erfolgreich in {target_channel.mention} gesendet!",
@@ -265,12 +261,12 @@ async def announce(
 
 
 # -------------------------------------------------------------------------
-# 5. ROBLOX BAN & UNBAN SYSTEM
+# 5. ROBLOX BAN & UNBAN PROTOKOLL
 # -------------------------------------------------------------------------
 
 
 @bot.tree.command(
-    name="ban", description="Banne einen Roblox-Spieler mit seinem Namen"
+    name="ban", description="Zeigt die Roblox-ID zum Bannen eines Spielers an"
 )
 @app_commands.checks.has_permissions(ban_members=True)
 async def roblox_ban(
@@ -288,10 +284,14 @@ async def roblox_ban(
     )
     return
 
+  banned_roblox_ids.add(str(roblox_id))
+
   embed = discord.Embed(
-      title="🔨 Roblox-Spieler gebannt",
+      title="🔨 Notruf Emden - Ban Protokoll",
       description=(
-          f"**Spieler:** {roblox_name} (ID: {roblox_id})\n**Grund:** {grund}"
+          f"**Spieler:** {roblox_name}\n**Roblox-ID:** `{roblox_id}`\n**Grund:**"
+          f" {grund}\n\n*Trage diese ID im In-Game-Menü ein, um den Spieler zu"
+          " bannen.*"
       ),
       color=discord.Color.dark_grey(),
   )
@@ -299,7 +299,7 @@ async def roblox_ban(
 
 
 @bot.tree.command(
-    name="unban", description="Entbanne einen Roblox-Spieler mit seinem Namen"
+    name="unban", description="Zeigt die Roblox-ID zum Entbannen eines Spielers an"
 )
 @app_commands.checks.has_permissions(ban_members=True)
 async def roblox_unban(
@@ -315,19 +315,47 @@ async def roblox_unban(
     )
     return
 
+  banned_roblox_ids.discard(str(roblox_id))
+
   embed = discord.Embed(
-      title="🔓 Roblox-Spieler entbannt",
+      title="🔓 Notruf Emden - Unban Protokoll",
       description=(
-          f"**Spieler:** {roblox_name} (ID: {roblox_id}) wurde entbannt."
+          f"**Spieler:** {roblox_name}\n**Roblox-ID:**"
+          f" `{roblox_id}`\n\n*Entbanne diesen Spieler im In-Game-Menü, damit"
+          " er wieder joinen kann.*"
       ),
       color=discord.Color.green(),
   )
   await interaction.followup.send(embed=embed)
 
 
-# Bot starten
-token = os.getenv("DISCORD_TOKEN")
-if not token:
-  print("Fehler: Kein DISCORD_TOKEN in den Umgebungsvariablen gefunden!")
-else:
-  bot.run(token)
+# --- Mini-Webserver (Hält Render glücklich) ---
+async def handle_bans(request):
+  return web.json_response(list(banned_roblox_ids))
+
+
+async def start_web_server():
+  app = web.Application()
+  app.router.add_get("/bans", handle_bans)
+  runner = web.AppRunner(app)
+  await runner.setup()
+  port = int(os.getenv("PORT", 10000))
+  site = web.TCPSite(runner, "0.0.0.0", port)
+  await site.start()
+  print(f"Webserver läuft auf Port {port}")
+
+
+async def main():
+  token = os.getenv("DISCORD_TOKEN")
+  if not token:
+    print("Fehler: Kein DISCORD_TOKEN in den Umgebungsvariablen gefunden!")
+    return
+
+  await start_web_server()
+  await bot.start(token)
+
+
+if __name__ == "__main__":
+  import asyncio
+
+  asyncio.run(main())
